@@ -64,6 +64,10 @@ const clienteArticuloSchema = new mongoose.Schema({
     type: Number,
     default: 0,
   },
+  deudaAnterior: {
+    type: Number,
+    default: 0,
+  },
 });
 
 const repartoSchema = new mongoose.Schema({

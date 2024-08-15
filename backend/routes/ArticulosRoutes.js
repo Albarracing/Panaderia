@@ -11,6 +11,6 @@ const router = express.Router();
 
 router.get("/", verArticulos);
 router.post("/", validationMiddleware(articuloSchema), agregarArticulo);
-router.put("/:_id", validationMiddleware(articuloSchema), actualizarArticulo);
+router.put("/:_id", actualizarArticulo);
 router.delete("/:_id", eliminarArticulo);
 export default router;

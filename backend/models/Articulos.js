@@ -35,7 +35,7 @@ const articuloSchema = new mongoose.Schema({
     required: true,
   },
   lugarPreparacion: {
-    type: String,
+    type: Number,
     required: true,
   },
   precios: [precioSchema],

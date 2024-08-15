@@ -14,6 +14,7 @@ const verRepartosFecha = async (req, res) => {
         $lt: endOfDay,
       },
     })
+
       .populate("clientesArticulos.clienteId")
       .populate("clientesArticulos.articulos.articuloId")
       .populate({
@@ -54,7 +55,47 @@ const verRepartosFecha = async (req, res) => {
   }
 };
 
+const obtenerDeudaPendiente = async (clienteId) => {
+  try {
+    // Busca el último reparto donde el cliente tiene deuda pendiente
+    const penultimoRepartoConDeuda = await Repartos.find({
+      "clientesArticulos.clienteId": clienteId,
+      "clientesArticulos.pagadoCompleto": false, // Filtra los repartos no pagados completamente
+    })
+      .sort({ fecha: -1 }) // Ordena por fecha descendente para obtener los más recientes
+      .limit(2); // Traer los dos más recientes para obtener el anterior al último reparto
+
+    // Si se encontró más de un reparto, queremos el segundo (penúltimo)
+    if (penultimoRepartoConDeuda.length > 1) {
+      const clienteArticulo =
+        penultimoRepartoConDeuda[1].clientesArticulos.find(
+          (ca) => ca.clienteId.toString() === clienteId.toString()
+        );
+
+      // Retorna la deuda del penúltimo reparto no pagado completamente
+      return clienteArticulo ? clienteArticulo.deuda : 0;
+    }
+
+    // Si solo hay un reparto con deuda, usa ese
+    if (penultimoRepartoConDeuda.length === 1) {
+      const clienteArticulo =
+        penultimoRepartoConDeuda[0].clientesArticulos.find(
+          (ca) => ca.clienteId.toString() === clienteId.toString()
+        );
+
+      return clienteArticulo ? clienteArticulo.deuda : 0;
+    }
+
+    // Si no se encontró ningún reparto con deuda, retorna 0
+    return 0;
+  } catch (error) {
+    console.error("Error al obtener la deuda pendiente:", error);
+    return 0;
+  }
+};
+
 // Ejemplo de controlador para obtener los detalles de un reparto
+
 const obtenerRepartoDetalles = async (req, res) => {
   try {
     const reparto = await Repartos.findById(req.params.repartoId).populate(
@@ -64,8 +105,42 @@ const obtenerRepartoDetalles = async (req, res) => {
       return res.status(404).json({ message: "Reparto no encontrado" });
     }
 
-    console.log("Reparto obtenido del backend:", reparto);
-    res.json(reparto);
+    // Calcular deuda pendiente
+    const repartosPrevios = await Repartos.find({
+      fecha: { $lt: reparto.fecha },
+    }).sort({ fecha: -1 });
+    const deudaPendientePorCliente = {};
+
+    for (const clienteArticulo of reparto.clientesArticulos) {
+      const clienteId = clienteArticulo.clienteId._id.toString();
+      deudaPendientePorCliente[clienteId] = 0;
+
+      for (const repartoPrevio of repartosPrevios) {
+        const clientePrevio = repartoPrevio.clientesArticulos.find(
+          (ca) => ca.clienteId.toString() === clienteId
+        );
+        if (clientePrevio) {
+          deudaPendientePorCliente[clienteId] += clientePrevio.deuda || 0;
+        }
+      }
+    }
+
+    const clientesArticulosConDeudaPendiente = reparto.clientesArticulos.map(
+      (clienteArticulo) => {
+        const deudaPendiente =
+          deudaPendientePorCliente[clienteArticulo.clienteId._id.toString()] ||
+          0;
+        return {
+          ...clienteArticulo.toObject(),
+          deudaPendiente,
+        };
+      }
+    );
+
+    res.json({
+      ...reparto.toObject(),
+      clientesArticulos: clientesArticulosConDeudaPendiente,
+    });
   } catch (error) {
     console.error("Error al obtener los detalles del reparto:", error);
     res.status(500).json({ message: "Error interno del servidor" });
@@ -124,7 +199,7 @@ const crearReparto = async (req, res) => {
 
         const localidadCliente = cliente.localidad;
 
-        //agregue esta linea
+        // Obtener deuda pendiente del cliente
         const deudaAnterior = cliente.deudaAcumulada || 0;
 
         const articulosConImportes = await Promise.all(
@@ -176,11 +251,17 @@ const crearReparto = async (req, res) => {
               cantidad: cantidad,
               importe: importeConDescuento,
               precioUnitario: precioUnitario,
-              cantidadDevuelta: articulo.cantidadDevuelta || 0, // Asegurando que cantidadDevuelta esté definido
+              cantidadDevuelta: articulo.cantidadDevuelta || 0,
             };
           })
         );
-        totalCliente += deudaAnterior; // Sumar deuda anterior al total del cliente
+
+        // Calcular la deuda del reparto actual
+        const montoPagado = clienteArticulo.montoPagado || 0;
+        const deudaActual = totalCliente - montoPagado;
+        const deudaPendiente = deudaAnterior + deudaActual;
+
+        totalCliente += deudaAnterior;
         totalReparto += totalCliente;
 
         return {
@@ -188,12 +269,12 @@ const crearReparto = async (req, res) => {
           localidad: localidadCliente,
           articulos: articulosConImportes,
           totalCliente: totalCliente,
-          deudaAnterior: deudaAnterior, // Incluir la deuda anterior
-          deuda: clienteArticulo.deuda || 0, // Guardar la deuda enviada desde el frontend
-          cantidadDevuelta: clienteArticulo.cantidadDevuelta || 0, // Asegurando que cantidadDevuelta esté definido
-          devoluciones: clienteArticulo.devoluciones || [], // Asegurando que devoluciones esté definido
-          pagadoCompleto: clienteArticulo.pagadoCompleto || false, // Asegurando que pagadoCompleto esté definido
-          montoPagado: clienteArticulo.montoPagado || 0, // Asegurando que montoPagado esté definido
+          deudaAnterior: deudaAnterior,
+          deuda: deudaPendiente, // Guardar la deuda pendiente
+          cantidadDevuelta: clienteArticulo.cantidadDevuelta || 0,
+          devoluciones: clienteArticulo.devoluciones || [],
+          pagadoCompleto: clienteArticulo.pagadoCompleto || false,
+          montoPagado: montoPagado,
         };
       })
     );
@@ -216,6 +297,17 @@ const crearReparto = async (req, res) => {
 
     await repartoAlmacenado.save();
 
+    // Actualizar deuda acumulada de los clientes
+    await Promise.all(
+      clientesArticulos.map(async (clienteArticulo) => {
+        const cliente = await Cliente.findById(clienteArticulo.cliente);
+        const nuevoTotalDeuda = clienteArticulo.deuda || 0; // Actualizar con la deuda pendiente
+        await Cliente.findByIdAndUpdate(clienteArticulo.cliente, {
+          deudaAcumulada: nuevoTotalDeuda,
+        });
+      })
+    );
+
     res.json(repartoAlmacenado);
   } catch (error) {
     console.error("Error al crear el reparto:", error);
@@ -225,6 +317,136 @@ const crearReparto = async (req, res) => {
     });
   }
 };
+
+// const crearReparto = async (req, res) => {
+//   const { clientesArticulos, fecha, repartidor, alias } = req.body;
+
+//   try {
+//     if (!clientesArticulos || !fecha) {
+//       return res.status(400).json({ message: "Faltan datos necesarios" });
+//     }
+
+//     const todosLosArticulos = await Articulos.find().populate(
+//       "precios.localidad"
+//     );
+
+//     let totalReparto = 0;
+//     const cantidadTotalPorProducto = new Map();
+
+//     const clientesArticulosConImportes = await Promise.all(
+//       clientesArticulos.map(async (clienteArticulo) => {
+//         let totalCliente = 0;
+
+//         const cliente = await Cliente.findById(clienteArticulo.cliente);
+//         if (!cliente) {
+//           throw new Error(
+//             `Cliente con ID ${clienteArticulo.cliente} no encontrado`
+//           );
+//         }
+
+//         const localidadCliente = cliente.localidad;
+
+//         //agregue esta linea
+//         const deudaAnterior = cliente.deudaAcumulada || 0;
+
+//         const articulosConImportes = await Promise.all(
+//           clienteArticulo.articulos.map(async (articulo) => {
+//             const articuloInfo = todosLosArticulos.find((a) =>
+//               a._id.equals(articulo.articulo)
+//             );
+//             if (!articuloInfo) {
+//               throw new Error(
+//                 `Artículo con ID ${articulo.articulo} no encontrado`
+//               );
+//             }
+
+//             const precioInfo = articuloInfo.precios.find((p) =>
+//               p.localidad.equals(localidadCliente)
+//             );
+//             if (!precioInfo) {
+//               throw new Error(
+//                 `No se encontró un precio para la localidad con ID ${localidadCliente}`
+//               );
+//             }
+
+//             const precioUnitario = precioInfo.precio;
+//             const cantidad = parseInt(articulo.cantidad, 10);
+
+//             if (isNaN(cantidad)) {
+//               throw new Error(
+//                 `Cantidad del artículo con ID ${articulo.articulo} es inválida`
+//               );
+//             }
+
+//             const importeSinDescuento = cantidad * precioUnitario;
+//             const descuento = cliente.descuento || 0;
+//             const importeConDescuento =
+//               importeSinDescuento - (importeSinDescuento * descuento) / 100;
+//             totalCliente += importeConDescuento;
+
+//             const nombreProducto = articuloInfo.nombre;
+//             const cantidadActual =
+//               cantidadTotalPorProducto.get(nombreProducto) || 0;
+//             cantidadTotalPorProducto.set(
+//               nombreProducto,
+//               cantidadActual + cantidad
+//             );
+
+//             return {
+//               articuloId: articulo.articulo,
+//               nombre: nombreProducto,
+//               cantidad: cantidad,
+//               importe: importeConDescuento,
+//               precioUnitario: precioUnitario,
+//               cantidadDevuelta: articulo.cantidadDevuelta || 0, // Asegurando que cantidadDevuelta esté definido
+//             };
+//           })
+//         );
+//         totalCliente += deudaAnterior; // Sumar deuda anterior al total del cliente
+//         totalReparto += totalCliente;
+
+//         return {
+//           clienteId: clienteArticulo.cliente,
+//           localidad: localidadCliente,
+//           articulos: articulosConImportes,
+//           totalCliente: totalCliente,
+//           deudaAnterior: deudaAnterior, // Incluir la deuda anterior
+//           deuda: clienteArticulo.deuda || 0, // Guardar la deuda enviada desde el frontend
+//           cantidadDevuelta: clienteArticulo.cantidadDevuelta || 0, // Asegurando que cantidadDevuelta esté definido
+//           devoluciones: clienteArticulo.devoluciones || [], // Asegurando que devoluciones esté definido
+//           pagadoCompleto: clienteArticulo.pagadoCompleto || false, // Asegurando que pagadoCompleto esté definido
+//           montoPagado: clienteArticulo.montoPagado || 0, // Asegurando que montoPagado esté definido
+//         };
+//       })
+//     );
+
+//     const nuevoNumeroPedido = await obtenerSiguienteNumeroPedido();
+
+//     const repartoAlmacenado = new Repartos({
+//       clientesArticulos: clientesArticulosConImportes,
+//       totalReparto: parseFloat(totalReparto.toFixed(2)),
+//       cantidadTotalPorProducto: Object.fromEntries(cantidadTotalPorProducto),
+//       cantidadDevueltaTotal: clientesArticulosConImportes.reduce(
+//         (acc, cliente) => acc + cliente.cantidadDevuelta,
+//         0
+//       ),
+//       fecha: new Date(fecha),
+//       repartidor: repartidor,
+//       alias,
+//       numeroPedido: nuevoNumeroPedido,
+//     });
+
+//     await repartoAlmacenado.save();
+
+//     res.json(repartoAlmacenado);
+//   } catch (error) {
+//     console.error("Error al crear el reparto:", error);
+//     res.status(500).json({
+//       message: "Error interno del servidor",
+//       error: error.message,
+//     });
+//   }
+// };
 
 const actualizarPagoCompleto = async (req, res) => {
   const { repartoId, clienteId } = req.params;
@@ -393,6 +615,48 @@ const actualizarCantidadDevuelta = async (req, res) => {
   }
 };
 
+// Función para actualizar la deuda del cliente
+const actualizarDeudaCliente = async (clienteId, deuda) => {
+  try {
+    const cliente = await Cliente.findById(clienteId);
+    if (cliente) {
+      cliente.deuda = deuda;
+      await cliente.save();
+      console.log(`Deuda actualizada para clienteId=${clienteId}`);
+    } else {
+      console.error(`Cliente no encontrado para clienteId=${clienteId}`);
+    }
+  } catch (error) {
+    console.error(`Error al actualizar la deuda del cliente: ${error}`);
+    throw error;
+  }
+};
+
+const registrarDevolucion = async (req, res) => {
+  const { repartoId, clienteId, articuloId } = req.params;
+  const { cantidadDevuelta, deuda, fechaDevolucion } = req.body;
+  try {
+    // Actualizar la devolución en la base de datos
+    await Repartos.findByIdAndUpdate(repartoId, {
+      $push: {
+        [`clientes.${clienteId}.devoluciones`]: {
+          articuloId,
+          cantidadDevuelta,
+          fechaDevolucion,
+        },
+      },
+    });
+
+    // Actualizar la deuda del cliente
+    await actualizarDeudaCliente(clienteId, deuda);
+
+    res.status(200).json({ mensaje: "Devolución registrada exitosamente" });
+  } catch (error) {
+    console.error(`Error al registrar la devolución: ${error}`);
+    res.status(500).json({ error: "Error al registrar la devolución" });
+  }
+};
+
 // const actualizarCantidadDevuelta = async (req, res) => {
 //   const { repartoId, clienteId, articuloId } = req.params;
 //   const { cantidadDevuelta, deuda, fechaDevolucion } = req.body;
@@ -485,12 +749,15 @@ const eliminarReparto = async (req, res) => {
 export {
   verRepartosFecha,
   verRepartos,
+  obtenerDeudaPendiente,
   crearReparto,
   actualizarPagoCompleto,
   actualizarMontoPagado,
   actualizarCantidadDevuelta,
   eliminarReparto,
   obtenerRepartoDetalles,
+  registrarDevolucion,
+  actualizarDeudaCliente,
 };
 
 // import Repartos from "../models/Repartos.js";

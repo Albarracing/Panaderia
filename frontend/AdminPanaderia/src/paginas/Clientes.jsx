@@ -5,9 +5,9 @@ import ListadoDeClientes from "../componentes/ListadoDeClientes";
 const Clientes = () => {
   return (
     <div className="flex flex-col">
-      <div className="bg-black w-full h-20">
-        <p className="text-indigo-600 uppercase text-center mt-5 text-3xl">
-          panaderia teodelina
+      <div className="bg-black py-5">
+        <p className="text-white uppercase text-center text-3xl">
+          Panadería Teodelina
         </p>
       </div>
       <div className="">

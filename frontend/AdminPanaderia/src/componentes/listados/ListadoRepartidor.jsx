@@ -31,17 +31,27 @@ const ListadoRepartidor = () => {
     }
   };
 
-  const generatePDF = () => {
-    const doc = new jsPDF();
-    doc.text("Reporte de Repartos con Detalles", 14, 16);
-
-    if (!repartos.length) {
-      console.error("No hay repartos para generar el PDF.");
-      return;
+  const obtenerDeudaPendiente = async (clienteId) => {
+    try {
+      const response = await axios.get(
+        `http://localhost:3000/api/deudaPendiente/${clienteId}`
+      );
+      return response.data.deudaPendiente;
+    } catch (error) {
+      console.error("Error al obtener la deuda pendiente:", error);
+      return 0;
     }
+  };
 
-    repartos.forEach((reparto) => {
-      reparto.clientesArticulos.forEach((clienteArticulo) => {
+  const generatePDF = async () => {
+    const doc = new jsPDF();
+    let yPosition = 16;
+
+    doc.text("Reporte de Repartos con Detalles", 14, yPosition);
+    yPosition += 10;
+
+    for (const reparto of repartos) {
+      for (const clienteArticulo of reparto.clientesArticulos) {
         const clienteNombre = `${clienteArticulo.clienteId.nombre} ${clienteArticulo.clienteId.apellido}`;
         const articulos = clienteArticulo.articulos
           .map(
@@ -52,25 +62,36 @@ const ListadoRepartidor = () => {
           .map((articulo) => articulo.importe.toFixed(2))
           .join("     ");
 
-        doc.text(clienteNombre, 14, doc.autoTable.previous.finalY + 10 || 30);
-        doc.text(`${articulos}`, 14, doc.autoTable.previous.finalY + 20 || 40);
-        doc.text(`$${importes}`, 14, doc.autoTable.previous.finalY + 30 || 50);
-        doc.text(
-          `Deuda: $${clienteArticulo.deuda.toFixed(
-            2
-          )}   Importe: $${clienteArticulo.totalCliente.toFixed(2)}`,
-          14,
-          doc.autoTable.previous.finalY + 40 || 60
-        );
-        doc.text(
-          `Monto Pagado:                    Devuelve:  `,
-          14,
-          doc.autoTable.previous.finalY + 50 || 70
+        doc.text(clienteNombre, 14, yPosition);
+        yPosition += 10;
+        doc.text(`Artículos: ${articulos}`, 14, yPosition);
+        yPosition += 10;
+        doc.text(`Importes: ${importes}`, 14, yPosition);
+        yPosition += 10;
+
+        const deudaAnterior = await obtenerDeudaPendiente(
+          clienteArticulo.clienteId._id
         );
 
-        doc.addPage();
-      });
-    });
+        doc.text(
+          `Deuda Anterior: $${deudaAnterior.toFixed(
+            2
+          )}   Importe Total: $${clienteArticulo.totalCliente.toFixed(2)}`,
+          14,
+          yPosition
+        );
+        yPosition += 10;
+
+        yPosition += 10;
+
+        if (yPosition > 270) {
+          doc.addPage();
+          yPosition = 16;
+          doc.text("Reporte de Repartos con Detalles", 14, yPosition);
+          yPosition += 10;
+        }
+      }
+    }
 
     doc.save(
       `reporte_repartos_detalles_${
@@ -121,7 +142,7 @@ const ListadoRepartidor = () => {
                     .join("     ")}
                 </p>
                 <p>
-                  Deuda: ${clienteArticulo.deuda.toFixed(2)} Importe: $
+                  Deuda: ${clienteArticulo.deudaAnterior.toFixed(2)} Importe: $
                   {clienteArticulo.totalCliente.toFixed(2)}
                 </p>
                 {/* <p>Devuelve: ____________ Monto Pagado: ____________</p> */}

@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import autopopulate from "mongoose-autopopulate";
+//import autopopulate from "mongoose-autopopulate";
 
 const clienteSchema = new mongoose.Schema({
   codigo: { type: Number, unique: true },
@@ -15,25 +15,6 @@ const clienteSchema = new mongoose.Schema({
     ref: "Localidad",
     required: true,
   },
-  articulo: [
-    {
-      articuloId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Articulos",
-        autopopulate: true,
-      },
-      nombre: { type: String },
-      cantidad: {
-        lunes: { type: Number, default: 0 },
-        martes: { type: Number, default: 0 },
-        miercoles: { type: Number, default: 0 },
-        jueves: { type: Number, default: 0 },
-        viernes: { type: Number, default: 0 },
-        sabado: { type: Number, default: 0 },
-        domingo: { type: Number, default: 0 },
-      },
-    },
-  ],
   deudaAcumulada: { type: Number, default: 0 },
 });
 

@@ -30,30 +30,6 @@ const RepartoDetalles = ({}) => {
     }
   }, [pedidos]);
 
-  // useEffect(() => {
-  //   const fetchRepartoDetalles = async () => {
-  //     setLoading(true);
-  //     try {
-  //       const response = await axios.get(
-  //         `http://localhost:3000/api/repartos/${repartoId}`
-  //       );
-  //       console.log("Reparto detalles recibido del backend:", response.data);
-  //       setReparto(response.data);
-  //       if (response.data.clientesArticulos) {
-  //         setClientesArticulos(
-  //           response.data.clientesArticulos.map(prepararClienteArticulo)
-  //         );
-  //       }
-  //     } catch (err) {
-  //       setError(err.message);
-  //     } finally {
-  //       setLoading(false);
-  //     }
-  //   };
-
-  //   fetchRepartoDetalles();
-  // }, [repartoId]);
-
   const prepararClienteArticulo = (clienteArticulo) => ({
     ...clienteArticulo,
     originalPagadoCompleto: clienteArticulo.pagadoCompleto,
@@ -175,7 +151,6 @@ const RepartoDetalles = ({}) => {
       setLoading(true);
       await Promise.all(
         clientesArticulos.map(async (clienteArticulo) => {
-          console.log("Cliente Artículo para Guardar:", clienteArticulo);
           if (
             clienteArticulo.pagadoCompleto !==
             clienteArticulo.originalPagadoCompleto
@@ -195,26 +170,19 @@ const RepartoDetalles = ({}) => {
             await guardarMontoPagadoEnBackend(
               repartoId,
               clienteArticulo.clienteId._id,
-              clienteArticulo.montoPagado
+              clienteArticulo.montoPagado,
+              clienteArticulo.deuda
             );
           }
 
           await Promise.all(
             clienteArticulo.articulos.map(async (articulo) => {
               if (articulo.cantidadDevuelta > 0) {
-                const fechaDevolucion = new Date().toISOString().split("T")[0]; // Fecha actual como fecha de devolución
+                const fechaDevolucion = new Date().toISOString().split("T")[0];
                 const deuda = Math.max(
                   clienteArticulo.totalCliente - clienteArticulo.montoPagado,
                   0
                 );
-                console.log("Registrando Devolución:", {
-                  repartoId,
-                  clienteId: clienteArticulo.clienteId._id,
-                  articuloId: articulo.articuloId._id,
-                  cantidadDevuelta: articulo.cantidadDevuelta,
-                  fechaDevolucion,
-                  deuda,
-                });
                 await registrarDevolucionEnBackend(
                   repartoId,
                   clienteArticulo.clienteId._id,
@@ -238,7 +206,6 @@ const RepartoDetalles = ({}) => {
       );
 
       console.log("Cambios guardados exitosamente!");
-      // window.location.reload();
     } catch (error) {
       setError("Error al guardar cambios");
       console.error("Error al guardar cambios:", error);

@@ -10,7 +10,7 @@ const articuloSchema = Joi.object({
   nombre: Joi.string().required(),
   unidad: Joi.string().required(),
   precioMostrador: Joi.number().optional(),
-  lugarPreparacion: Joi.string().required(),
+  lugarPreparacion: Joi.number().required(),
   precios: Joi.array().items(precioSchema).required(),
 });
 

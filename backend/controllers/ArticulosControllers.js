@@ -48,26 +48,19 @@ const actualizarArticulo = async (req, res) => {
     req.body;
 
   try {
-    // Validar el ID de MongoDB
+    console.log("Datos recibidos:", req.body); // Verifica los datos que llegan al backend
+
     if (!mongoose.isValidObjectId(_id)) {
       return res
         .status(400)
         .json({ error: "El ID proporcionado no es válido." });
     }
 
-    // Validar datos del artículo usando Joi
-    const { error } = articuloSchema.validate(req.body);
-    if (error) {
-      return res.status(422).json({ error: error.details[0].message });
-    }
-
-    // Verificar la existencia del artículo
     const articuloExistente = await Articulos.findById(_id);
     if (!articuloExistente) {
       return res.status(404).json({ error: "El artículo no existe." });
     }
 
-    // Actualizar el artículo
     const articuloActualizado = await Articulos.findByIdAndUpdate(
       _id,
       {
@@ -83,9 +76,15 @@ const actualizarArticulo = async (req, res) => {
       { new: true, useFindAndModify: false }
     );
 
+    if (!articuloActualizado) {
+      return res
+        .status(500)
+        .json({ error: "No se pudo actualizar el artículo." });
+    }
+
     res.json(articuloActualizado);
   } catch (error) {
-    console.error(error);
+    console.error("Error en la actualización:", error);
     res.status(500).json({ error: "Hubo un error al procesar la solicitud." });
   }
 };

@@ -61,7 +61,7 @@ const FormularioArticulos = ({ articulo, onSubmit, onClose }) => {
     e.preventDefault();
     const preciosArray = Object.keys(precios).map((localidadId) => ({
       localidad: localidadId,
-      precio: precios[localidadId],
+      precio: Number(precios[localidadId]), // Convertir el precio a número
     }));
     onSubmit({
       nombre,

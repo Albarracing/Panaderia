@@ -16,6 +16,7 @@ import RepartoDetalles from "./componentes/repartosNuevo/RepartoDetalles.jsx";
 import ListadoRepartos from "./componentes/listados/ListadoRepartos.jsx";
 import ListadoRepartosConDetalles from "./componentes/listados/ListadoRepartoConDetalles.jsx";
 import ListadoRepartidor from "./componentes/listados/ListadoRepartidor.jsx";
+import ListadoCantDeArticulos from "./componentes/listados/ListadoCantDeArticulos.jsx";
 function App() {
   const [shouldUpdate, setShouldUpdate] = useState(true);
   return (
@@ -47,6 +48,10 @@ function App() {
               <Route path="/Localidades" element={<Localidades />} />
               <Route path="/Listados" element={<Listados />} />
               <Route path="/ListadoVueltas" element={<ListadoRepartos />} />
+              <Route
+                path="/ListadoProductos"
+                element={<ListadoCantDeArticulos />}
+              />
               <Route
                 path="/ListadoRepartidor"
                 element={<ListadoRepartidor />}
