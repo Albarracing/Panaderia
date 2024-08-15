@@ -1,0 +1,20 @@
+version: '3.8'
+services:
+  mongodb-panaderia:
+    image: mongo:latest
+    container_name: mongodb-panaderia
+    ports:
+      - "27017:27017"
+    volumes:
+      - ./data/db:/data/db
+
+  backend-panaderia:
+    build:
+      context: ./backend
+    container_name: backend-panaderia
+    ports:
+      - "3000:3000"
+    depends_on:
+      - mongodb-panaderia
+    environment:
+      - MONGO_URI=mongodb://mongodb-panaderia:27017/Panaderia
